@@ -1,0 +1,39 @@
+workflows:
+  android-apk:
+    name: Mind Save Note APK
+    instance_type: linux_x2
+    max_build_duration: 30
+    environment:
+      flutter: stable
+    scripts:
+      - name: Create Android project files
+        script: flutter create --org com.mindsavenote --project-name mind_save_note --platforms=android .
+      - name: Add permissions and settings
+        script: |
+          python3 - <<'PY'
+          import re, glob
+          m = 'android/app/src/main/AndroidManifest.xml'
+          s = open(m).read()
+          if 'android.permission.INTERNET' not in s:
+              s = s.replace('<application',
+                  '<uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>\n    <application', 1)
+          open(m, 'w').write(s)
+          for f in glob.glob('android/app/src/main/**/MainActivity.*', recursive=True):
+              s = open(f).read()
+              s = s.replace('io.flutter.embedding.android.FlutterActivity', 'io.flutter.embedding.android.FlutterFragmentActivity')
+              s = s.replace('FlutterActivity()', 'FlutterFragmentActivity()')
+              open(f, 'w').write(s)
+          for f in glob.glob('android/app/build.gradle*'):
+              s = open(f).read()
+              kts = f.endswith('.kts')
+              s = re.sub(r'minSdk(Version)?\s*=?\s*flutter\.minSdkVersion',
+                         'minSdk = 24' if kts else 'minSdkVersion 24', s)
+              open(f, 'w').write(s)
+          PY
+      - name: Get packages
+        script: flutter pub get
+      - name: Build APK
+        script: flutter build apk --release
+    artifacts:
+      - build/app/outputs/flutter-apk/*.apk
+      
